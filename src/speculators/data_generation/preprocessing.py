@@ -741,6 +741,7 @@ def _load_hf_dataset(spec: str) -> tuple[HFDataset, None]:
 
 def load_raw_dataset(
     train_data_path: str,
+    num_proc: int | None = None,
 ) -> tuple[HFDataset, Callable[[dict], dict] | None]:
     """Load a raw dataset from one of several source types.
 
@@ -753,6 +754,9 @@ def load_raw_dataset(
 
     Args:
         train_data_path: File path, directory path, preset name, or ``hf:`` spec.
+        num_proc: Processes for split generation. Only affects local
+            ``.json``/``.jsonl`` sources, where the builder parallelizes
+            across data files (a single file stays single-process).
 
     Returns:
         Tuple of (raw_dataset, normalize_fn). normalize_fn is None for sources
@@ -764,7 +768,9 @@ def load_raw_dataset(
     """
     # 1. Local file
     if train_data_path.endswith((".jsonl", ".json")):
-        return load_dataset("json", data_files=train_data_path, split="train"), None
+        return load_dataset(
+            "json", data_files=train_data_path, split="train", num_proc=num_proc
+        ), None
 
     # 2. Local directory
     path = Path(train_data_path)
@@ -776,7 +782,9 @@ def load_raw_dataset(
             raise ValueError(
                 f"No .json/.jsonl files found in directory: {train_data_path}"
             )
-        return load_dataset("json", data_files=data_files, split="train"), None
+        return load_dataset(
+            "json", data_files=data_files, split="train", num_proc=num_proc
+        ), None
 
     # 3. Named preset
     if train_data_path in DATASET_CONFIGS:
@@ -881,7 +889,9 @@ def load_and_preprocess_dataset(
     processed_datasets = []
     for train_data_path in train_data_paths:
         log.subsection(f"Processing {train_data_path}")
-        raw_dataset, normalize_fn = load_raw_dataset(train_data_path)
+        raw_dataset, normalize_fn = load_raw_dataset(
+            train_data_path, num_proc=build_dataset_num_proc
+        )
         raw_dataset = raw_dataset.shuffle(seed=seed)
 
         if max_samples is not None and len(raw_dataset) > 3 * max_samples:
